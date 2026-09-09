@@ -102,7 +102,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=JetBrains+Mono:wght@400;500&family=Caveat:wght@500;600&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=JetBrains+Mono:wght@400;500&family=Caveat:wght@500;600&family=Playfair+Display:ital,wght@0,500;0,700;1,400&family=VT323&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
@@ -167,9 +167,27 @@ function RootComponent() {
 
             {/* Toast Notifications */}
             <Toaster position="top-center" />
+
+            {/* Background Persistent YouTube Player */}
+            <div
+              id="archive-yt-player-container"
+              style={{
+                position: "fixed",
+                bottom: -9999,
+                left: -9999,
+                width: 1,
+                height: 1,
+                opacity: 0,
+                pointerEvents: "none",
+              }}
+              aria-hidden="true"
+            >
+              <div id="archive-yt-player" />
+            </div>
           </div>
         </PlayerProvider>
       </ArchiveProvider>
     </QueryClientProvider>
   );
 }
+

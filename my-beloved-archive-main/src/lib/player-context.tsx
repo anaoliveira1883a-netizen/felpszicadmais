@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Item } from "./archive";
+import { extractYouTubeId, loadYouTubeIframeAPI } from "./youtube";
 
 export type PlayerState = {
   currentTrack: Item | null;
@@ -18,6 +19,10 @@ export type PlayerState = {
   rpm: 33 | 45;
   volume: number;
   isTurntableOpen: boolean;
+  isYouTube: boolean;
+  youtubeId: string | null;
+  showVideoEmbed: boolean;
+  toggleVideoEmbed: () => void;
   playTrack: (item: Item) => void;
   pauseTrack: () => void;
   resumeTrack: () => void;
@@ -41,7 +46,9 @@ class VintageSynthAudio {
 
   init() {
     if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
         this.masterGain = this.ctx.createGain();
@@ -82,9 +89,9 @@ class VintageSynthAudio {
       // Play soothing warm pentatonic chord progression
       const chords = [
         [261.63, 329.63, 392.0, 523.25], // C maj
-        [220.0, 261.63, 329.63, 440.0],  // A min
+        [220.0, 261.63, 329.63, 440.0], // A min
         [174.61, 220.0, 261.63, 349.23], // F maj
-        [196.0, 246.94, 293.66, 392.0],  // G maj
+        [196.0, 246.94, 293.66, 392.0], // G maj
       ];
       let step = 0;
 
@@ -149,15 +156,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(180); // default 3:00 for vinyl feel
-  const [rpm, setRpm] = useState<33 | 45>(33);
-  const [volume, setVolumeState] = useState(0.8);
+  const [duration, setDuration] = useState(180);
+  const [rpm, setRpmState] = useState<33 | 45>(33);
+  const [volume, setVolumeState] = useState(0.85);
   const [isTurntableOpen, setIsTurntableOpen] = useState(false);
+  const [isYouTube, setIsYouTube] = useState(false);
+  const [youtubeId, setYoutubeId] = useState<string | null>(null);
+  const [showVideoEmbed, setShowVideoEmbed] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const synthRef = useRef<VintageSynthAudio | null>(null);
-  const timerRef = useRef<number | null>(null);
+  const ytPlayerRef = useRef<any>(null);
+  const ytTimerRef = useRef<number | null>(null);
+  const synthTimerRef = useRef<number | null>(null);
 
+  // Setup HTML5 Audio element
   useEffect(() => {
     synthRef.current = new VintageSynthAudio();
     const audio = new Audio();
@@ -186,14 +199,112 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener("ended", onEnded);
       audio.pause();
       synthRef.current?.stop();
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (ytTimerRef.current) clearInterval(ytTimerRef.current);
+      if (synthTimerRef.current) clearInterval(synthTimerRef.current);
     };
   }, []);
 
-  // Simulated playback timer for tracks that use the vintage synthesizer
+  // Initialize or attach YouTube player
+  const initYouTubePlayer = useCallback(
+    async (videoId: string) => {
+      await loadYouTubeIframeAPI();
+
+      return new Promise<any>((resolve) => {
+        if (ytPlayerRef.current && ytPlayerRef.current.loadVideoById) {
+          ytPlayerRef.current.loadVideoById(videoId);
+          ytPlayerRef.current.setVolume(volume * 100);
+          ytPlayerRef.current.setPlaybackRate(rpm === 45 ? 1.25 : 1.0);
+          ytPlayerRef.current.playVideo();
+          resolve(ytPlayerRef.current);
+          return;
+        }
+
+        const el = document.getElementById("archive-yt-player");
+        if (!el || !window.YT) {
+          resolve(null);
+          return;
+        }
+
+        try {
+          ytPlayerRef.current = new window.YT.Player("archive-yt-player", {
+            height: "100%",
+            width: "100%",
+            videoId: videoId,
+            playerVars: {
+              autoplay: 1,
+              controls: 0,
+              modestbranding: 1,
+              rel: 0,
+              playsinline: 1,
+            },
+            events: {
+              onReady: (event: any) => {
+                event.target.setVolume(volume * 100);
+                event.target.setPlaybackRate(rpm === 45 ? 1.25 : 1.0);
+                event.target.playVideo();
+                resolve(event.target);
+              },
+              onStateChange: (event: any) => {
+                // YT.PlayerState: 1 = PLAYING, 2 = PAUSED, 0 = ENDED
+                if (event.data === 1) {
+                  setIsPlaying(true);
+                } else if (event.data === 2) {
+                  setIsPlaying(false);
+                } else if (event.data === 0) {
+                  setIsPlaying(false);
+                  setProgress(0);
+                  setCurrentTime(0);
+                }
+              },
+              onError: (err: any) => {
+                console.warn("YouTube player error, falling back to synth:", err);
+                synthRef.current?.init();
+                synthRef.current?.startCrackle();
+              },
+            },
+          });
+        } catch (e) {
+          console.warn("Could not create YouTube player:", e);
+          resolve(null);
+        }
+      });
+    },
+    [volume, rpm],
+  );
+
+  // YouTube progress sync interval
   useEffect(() => {
-    if (isPlaying && (!currentTrack?.audioUrl || !audioRef.current?.src)) {
-      timerRef.current = window.setInterval(() => {
+    if (isYouTube && isPlaying) {
+      ytTimerRef.current = window.setInterval(() => {
+        if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
+          try {
+            const current = ytPlayerRef.current.getCurrentTime();
+            const dur = ytPlayerRef.current.getDuration();
+            if (dur > 0) {
+              setDuration(dur);
+              setCurrentTime(current);
+              setProgress((current / dur) * 100);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }, 500);
+    } else {
+      if (ytTimerRef.current) {
+        clearInterval(ytTimerRef.current);
+        ytTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (ytTimerRef.current) clearInterval(ytTimerRef.current);
+    };
+  }, [isYouTube, isPlaying]);
+
+  // Synthetic Vinyl timer for tracks without audio URL or YouTube
+  useEffect(() => {
+    if (isPlaying && !isYouTube && (!currentTrack?.audioUrl || !audioRef.current?.src)) {
+      synthTimerRef.current = window.setInterval(() => {
         setCurrentTime((prev) => {
           const next = prev + 1;
           if (next >= duration) {
@@ -206,56 +317,88 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         });
       }, 1000);
     } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+      if (synthTimerRef.current) {
+        clearInterval(synthTimerRef.current);
+        synthTimerRef.current = null;
       }
     }
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (synthTimerRef.current) clearInterval(synthTimerRef.current);
     };
-  }, [isPlaying, currentTrack, duration]);
+  }, [isPlaying, isYouTube, currentTrack, duration]);
 
-  const playTrack = useCallback((item: Item) => {
-    setCurrentTrack(item);
-    setIsPlaying(true);
-    setCurrentTime(0);
-    setProgress(0);
+  const playTrack = useCallback(
+    (item: Item) => {
+      setCurrentTrack(item);
+      setIsPlaying(true);
+      setCurrentTime(0);
+      setProgress(0);
 
-    if (item.audioUrl && audioRef.current) {
-      synthRef.current?.stop();
-      audioRef.current.src = item.audioUrl;
-      audioRef.current.volume = volume;
-      audioRef.current.play().catch((e) => {
-        console.warn("Direct audio play prevented, falling back to synth:", e);
+      const ytId = extractYouTubeId(item.audioUrl) || extractYouTubeId(item.link);
+
+      if (ytId) {
+        // Pause direct HTML5 audio & stop synth
+        if (audioRef.current) audioRef.current.pause();
+        synthRef.current?.stop();
+
+        setIsYouTube(true);
+        setYoutubeId(ytId);
+        initYouTubePlayer(ytId);
+      } else if (item.audioUrl && audioRef.current) {
+        // Stop YouTube player
+        if (ytPlayerRef.current && ytPlayerRef.current.pauseVideo) {
+          ytPlayerRef.current.pauseVideo();
+        }
+        setIsYouTube(false);
+        setYoutubeId(null);
+        synthRef.current?.stop();
+
+        audioRef.current.src = item.audioUrl;
+        audioRef.current.volume = volume;
+        audioRef.current.playbackRate = rpm === 45 ? 1.25 : 1.0;
+        audioRef.current.play().catch((e) => {
+          console.warn("Direct audio play prevented, falling back to synth:", e);
+          synthRef.current?.init();
+          synthRef.current?.startCrackle();
+        });
+      } else {
+        // Synth nostalgic fallback
+        if (audioRef.current) audioRef.current.pause();
+        if (ytPlayerRef.current && ytPlayerRef.current.pauseVideo) {
+          ytPlayerRef.current.pauseVideo();
+        }
+        setIsYouTube(false);
+        setYoutubeId(null);
         synthRef.current?.init();
         synthRef.current?.startCrackle();
-      });
-    } else {
-      if (audioRef.current) audioRef.current.pause();
-      synthRef.current?.init();
-      synthRef.current?.startCrackle();
-    }
-  }, [volume]);
+      }
+    },
+    [volume, rpm, initYouTubePlayer],
+  );
 
   const pauseTrack = useCallback(() => {
     setIsPlaying(false);
+    if (isYouTube && ytPlayerRef.current && ytPlayerRef.current.pauseVideo) {
+      ytPlayerRef.current.pauseVideo();
+    }
     if (audioRef.current) {
       audioRef.current.pause();
     }
     synthRef.current?.stop();
-  }, []);
+  }, [isYouTube]);
 
   const resumeTrack = useCallback(() => {
     if (!currentTrack) return;
     setIsPlaying(true);
-    if (currentTrack.audioUrl && audioRef.current?.src) {
+    if (isYouTube && ytPlayerRef.current && ytPlayerRef.current.playVideo) {
+      ytPlayerRef.current.playVideo();
+    } else if (currentTrack.audioUrl && audioRef.current?.src) {
       audioRef.current.play().catch(() => {});
     } else {
       synthRef.current?.init();
       synthRef.current?.startCrackle();
     }
-  }, [currentTrack]);
+  }, [currentTrack, isYouTube]);
 
   const togglePlay = useCallback(() => {
     if (isPlaying) {
@@ -265,24 +408,51 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [isPlaying, pauseTrack, resumeTrack]);
 
-  const seek = useCallback((percent: number) => {
-    const target = (percent / 100) * duration;
-    setCurrentTime(target);
-    setProgress(percent);
-    if (audioRef.current && audioRef.current.duration) {
-      audioRef.current.currentTime = target;
-    }
-  }, [duration]);
+  const seek = useCallback(
+    (percent: number) => {
+      const target = (percent / 100) * duration;
+      setCurrentTime(target);
+      setProgress(percent);
 
-  const setVolume = useCallback((v: number) => {
-    setVolumeState(v);
-    if (audioRef.current) {
-      audioRef.current.volume = v;
-    }
-  }, []);
+      if (isYouTube && ytPlayerRef.current && ytPlayerRef.current.seekTo) {
+        ytPlayerRef.current.seekTo(target, true);
+      } else if (audioRef.current && audioRef.current.duration) {
+        audioRef.current.currentTime = target;
+      }
+    },
+    [duration, isYouTube],
+  );
+
+  const setRpm = useCallback(
+    (newRpm: 33 | 45) => {
+      setRpmState(newRpm);
+      const rate = newRpm === 45 ? 1.25 : 1.0;
+      if (audioRef.current) {
+        audioRef.current.playbackRate = rate;
+      }
+      if (ytPlayerRef.current && ytPlayerRef.current.setPlaybackRate) {
+        ytPlayerRef.current.setPlaybackRate(rate);
+      }
+    },
+    [],
+  );
+
+  const setVolume = useCallback(
+    (v: number) => {
+      setVolumeState(v);
+      if (audioRef.current) {
+        audioRef.current.volume = v;
+      }
+      if (ytPlayerRef.current && ytPlayerRef.current.setVolume) {
+        ytPlayerRef.current.setVolume(v * 100);
+      }
+    },
+    [],
+  );
 
   const openTurntable = useCallback(() => setIsTurntableOpen(true), []);
   const closeTurntable = useCallback(() => setIsTurntableOpen(false), []);
+  const toggleVideoEmbed = useCallback(() => setShowVideoEmbed((v) => !v), []);
 
   return (
     <PlayerContext.Provider
@@ -295,6 +465,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         rpm,
         volume,
         isTurntableOpen,
+        isYouTube,
+        youtubeId,
+        showVideoEmbed,
+        toggleVideoEmbed,
         playTrack,
         pauseTrack,
         resumeTrack,

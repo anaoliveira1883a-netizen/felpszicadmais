@@ -51,7 +51,7 @@ export const CATEGORIES: CategoryMeta[] = [
     key: "music",
     label: "Música",
     emoji: "🎵",
-    kaomoji: "(ノ^o^)ノ",
+    kaomoji: "( ˘ ³˘)♬",
     plural: "músicas",
     empty: "Nenhuma faixa gravada nesta fita ainda ♡",
     fields: [{ key: "subtitle", label: "Artista / álbum" }],
@@ -69,7 +69,7 @@ export const CATEGORIES: CategoryMeta[] = [
     key: "brand",
     label: "Marca",
     emoji: "🏷️",
-    kaomoji: "[ 🏷️ ]",
+    kaomoji: "( ˘ᴗ˘ )✦",
     plural: "marcas",
     empty: "Nenhuma etiqueta colada aqui ainda ♡",
     fields: [{ key: "subtitle", label: "Categoria (tênis, tech...)" }],
@@ -108,7 +108,7 @@ export const CATEGORIES: CategoryMeta[] = [
     key: "film",
     label: "Filme/Série",
     emoji: "🎬",
-    kaomoji: "( ◉ ‿ ◉ )",
+    kaomoji: "( ๑ ❛ ᴗ ❛ ๑ )",
     plural: "títulos",
     empty: "A fita ainda não foi rebobinada ♡",
     statuses: ["quero assistir", "assistindo", "terminado", "assistimos juntos"],
@@ -128,7 +128,7 @@ export const CATEGORIES: CategoryMeta[] = [
     key: "game",
     label: "Jogo",
     emoji: "🕹️",
-    kaomoji: "[ 🕹️ ]",
+    kaomoji: "( •̀ ᴗ •́ )و",
     plural: "jogos",
     empty: "Insira uma ficha para começar ♡",
     statuses: ["quer jogar", "jogando", "zerado", "jogamos juntos"],
@@ -138,7 +138,7 @@ export const CATEGORIES: CategoryMeta[] = [
     key: "book",
     label: "Livro",
     emoji: "📖",
-    kaomoji: "( ˘ ³˘)♥",
+    kaomoji: "( ˶ᵔ ᵕ ᵔ˶ )",
     plural: "livros",
     empty: "A estante ainda está vazia ♡",
     statuses: ["quer ler", "lendo", "lido", "favorito"],
@@ -158,7 +158,7 @@ export const CATEGORIES: CategoryMeta[] = [
     key: "said",
     label: "Coisa que ele disse",
     emoji: "💬",
-    kaomoji: "( 💬 )",
+    kaomoji: "( ˘͈ ᵕ ˘͈ )",
     plural: "comentários",
     empty: "Talvez ele mencione algo que você queira guardar aqui ♡",
     fields: [{ key: "subtitle", label: "Contexto (onde, quando)" }],
@@ -167,7 +167,7 @@ export const CATEGORIES: CategoryMeta[] = [
     key: "memory",
     label: "Memória",
     emoji: "📸",
-    kaomoji: "( 📸 )",
+    kaomoji: "( ˶ˆᗜˆ˵ )",
     plural: "memórias",
     empty: "Esta gaveta de fotos ainda está vazia ♡",
     fields: [{ key: "subtitle", label: "Pessoas / música do dia" }],
@@ -176,7 +176,7 @@ export const CATEGORIES: CategoryMeta[] = [
     key: "promise",
     label: "Promessa",
     emoji: "🫶",
-    kaomoji: "( 🫶 )",
+    kaomoji: "(っ˘з(˘⌣˘ )",
     plural: "promessas",
     empty: "Nenhum bilhete dentro da caixa ainda ♡",
     statuses: ["promessa nossa", "promessa pessoal", "algum dia", "cumprida"],
@@ -186,7 +186,7 @@ export const CATEGORIES: CategoryMeta[] = [
     key: "note",
     label: "Nota",
     emoji: "⭐",
-    kaomoji: "( ⭐ )",
+    kaomoji: "( ｡•́‿•̀｡)",
     plural: "notas",
     empty: "Nenhuma anotação solta ainda ♡",
     fields: [{ key: "subtitle", label: "Assunto" }],
@@ -209,11 +209,14 @@ export const THEMES = [
 
 export type CustomTheme = {
   primary: string;
-  secondary: string;
+  secondary?: string;
   background: string;
   surface: string;
-  font: "sans" | "serif" | "mono" | "pixel";
-  wallpaper: "dots" | "grid" | "crt" | "paper" | "clean";
+  textColor?: string;
+  font: "sans" | "serif" | "mono" | "pixel" | "hand";
+  borderStyle: "solid" | "dashed" | "double" | "retro" | "none";
+  wallpaper: "dots" | "grid" | "crt" | "paper" | "stars" | "sparkles" | "clean" | "custom";
+  customWallpaperUrl?: string;
 };
 
 export type Settings = {
@@ -225,8 +228,9 @@ export type Settings = {
   privacy: boolean;
   favoriteQuote: string;
   hue: number | null;
-  wallpaper: "dots" | "grid" | "crt" | "paper" | "clean";
+  wallpaper: "dots" | "grid" | "crt" | "paper" | "stars" | "sparkles" | "clean" | "custom";
   customTheme?: CustomTheme | undefined;
+  useCustomTheme?: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -239,6 +243,7 @@ export const DEFAULT_SETTINGS: Settings = {
   favoriteQuote: "guardando pequenas partes de você em um lugar só.",
   hue: null,
   wallpaper: "clean",
+  useCustomTheme: false,
 };
 
 const ITEMS_KEY = "archive.items.v1";
@@ -258,12 +263,13 @@ export function saveItems(items: Item[]) {
   try {
     localStorage.setItem(ITEMS_KEY, JSON.stringify(items));
   } catch (err) {
-    console.warn("Storage quota exceeded, stripping large inline data", err);
+    console.warn("Storage quota warning, keeping inline content safe:", err);
     try {
+      // In case quota is tightly exceeded, prune only excessively huge dataUrls (> 500kb)
       const stripped = items.map((it) => {
         const clone = { ...it };
-        if (clone.image && clone.image.length > 40000) delete clone.image;
-        if (clone.audioUrl && clone.audioUrl.length > 80000) delete clone.audioUrl;
+        if (clone.image && clone.image.length > 500000) delete clone.image;
+        if (clone.audioUrl && clone.audioUrl.length > 500000) delete clone.audioUrl;
         return clone;
       });
       localStorage.setItem(ITEMS_KEY, JSON.stringify(stripped));
@@ -322,9 +328,11 @@ export const seedItems = (): Item[] => {
       {
         favorite: true,
         rating: 5,
-        tags: ["nostalgia"],
+        tags: ["nostalgia", "jazz"],
         reason: "ele disse que essa toca na cabeça dele em dias de chuva",
         coverStyle: "vinyl",
+        audioUrl: "https://www.youtube.com/watch?v=kYJqUf7D70A",
+        image: "https://img.youtube.com/vi/kYJqUf7D70A/hqdefault.jpg",
       },
       2,
     ),
@@ -332,7 +340,13 @@ export const seedItems = (): Item[] => {
       "music",
       "Just Like Heaven",
       "The Cure · pós-punk",
-      { rating: 4, tags: ["rock"], coverStyle: "cassette" },
+      {
+        rating: 4,
+        tags: ["rock", "anos80"],
+        coverStyle: "cassette",
+        audioUrl: "https://www.youtube.com/watch?v=n3nPiBai66M",
+        image: "https://img.youtube.com/vi/n3nPiBai66M/hqdefault.jpg",
+      },
       6,
     ),
     mk(

@@ -57,21 +57,25 @@ export function ItemCard({ item, index = 0 }: { item: Item; index?: number }) {
       style={{ animationDelay: `${Math.min(index, 8) * 30}ms` }}
     >
       <div className="flex items-start gap-3">
-        {/* Thumbnail: photo, vinyl/cassette, or category emoji */}
+        {/* Thumbnail: photo/GIF, spinning vinyl on play, or category kaomoji */}
         {item.image ? (
-          <div className="size-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-border bg-secondary shadow-sm">
+          <div
+            className={`size-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-border bg-secondary shadow-sm transition-all ${
+              isThisPlaying ? "rounded-full ring-2 ring-primary animate-[spin-disc_3s_linear_infinite]" : ""
+            }`}
+          >
             <img src={item.image} alt={item.title} className="size-full object-cover" />
           </div>
         ) : (
           <div
-            className={`grid size-11 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-border bg-secondary text-lg relative ${
-              isThisPlaying ? "border-primary ring-2 ring-primary/30" : ""
+            className={`grid size-11 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-border bg-secondary text-sm font-mono relative transition-all ${
+              isThisPlaying ? "rounded-full border-primary ring-2 ring-primary/30 animate-[spin-disc_3s_linear_infinite] bg-neutral-900 text-primary-foreground" : ""
             }`}
           >
             {item.category === "music" && isThisPlaying ? (
-              <span className="animate-spin text-sm">💿</span>
+              <span>♬</span>
             ) : (
-              <span>{meta.emoji}</span>
+              <span className="text-base">{meta.emoji}</span>
             )}
           </div>
         )}
@@ -87,7 +91,7 @@ export function ItemCard({ item, index = 0 }: { item: Item; index?: number }) {
 
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <Chip>{meta.label}</Chip>
-            <span className="font-mono text-[0.6rem] text-muted-foreground/80">
+            <span className="font-mono text-[0.6rem] text-muted-foreground/80 select-none">
               {meta.kaomoji}
             </span>
             {item.status ? <Chip>{item.status}</Chip> : null}
@@ -108,8 +112,8 @@ export function ItemCard({ item, index = 0 }: { item: Item; index?: number }) {
                 e.stopPropagation();
                 playTrack(item);
               }}
-              title={isThisPlaying ? "Tocando agora" : "Tocar no toca-discos"}
-              className={`press size-7 rounded-full flex items-center justify-center font-mono text-xs ${
+              title={isThisPlaying ? "Tocando agora no toca-discos" : "Tocar no toca-discos"}
+              className={`press size-7 rounded-full flex items-center justify-center font-mono text-xs cursor-pointer ${
                 isThisPlaying
                   ? "bg-primary text-primary-foreground animate-pulse"
                   : "bg-secondary hover:bg-primary/20 text-foreground"
@@ -128,17 +132,17 @@ export function ItemCard({ item, index = 0 }: { item: Item; index?: number }) {
 export function EmptyDrawer({ text, kaomoji }: { text: string; kaomoji?: string }) {
   return (
     <div className="card-object flex flex-col items-center gap-2 px-6 py-10 text-center bg-secondary/40">
-      <div className="text-3xl opacity-70">🗄️</div>
-      {kaomoji && (
-        <p className="font-mono text-xs text-muted-foreground tracking-widest">{kaomoji}</p>
-      )}
-      <p className="font-hand text-xl">{text}</p>
+      <div className="text-2xl font-mono text-muted-foreground">
+        {kaomoji || "( ˘ω˘ ) ✦"}
+      </div>
+      <p className="font-hand text-xl text-foreground">{text}</p>
       <p className="max-w-[16rem] text-xs text-muted-foreground">
         Toque em “+” para guardar a primeira coisa nesta gaveta.
       </p>
     </div>
   );
 }
+
 
 export function RetroClock() {
   const [now, setNow] = useState<Date | null>(null);

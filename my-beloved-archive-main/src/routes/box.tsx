@@ -44,7 +44,7 @@ function MemoryBox() {
       <PageHeader
         title="Memory Box"
         subtitle="uma caixa antiga com pedacinhos guardados"
-        kaomoji="( 📦 )"
+        kaomoji="(づ๑•ᴗ•๑)づ ✦"
         backTo="/"
         backLabel="← arquivo"
       />

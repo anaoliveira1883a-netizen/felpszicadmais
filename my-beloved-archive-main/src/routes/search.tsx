@@ -52,7 +52,7 @@ function SearchPage() {
       <PageHeader
         title="Busca no Arquivo"
         subtitle="pesquise por palavras, tags ou gavetas"
-        kaomoji="[ ⌕ ]"
+        kaomoji="( ⚆ _ ⚆ ) ✦"
         backTo="/"
         backLabel="← arquivo"
       />
@@ -102,7 +102,7 @@ function SearchPage() {
 
       <div className="mt-5 grid gap-5">
         {grouped.length === 0 ? (
-          <EmptyDrawer text="Nada encontrado nesta gaveta ♡" kaomoji="( ⌕ )" />
+          <EmptyDrawer text="Nada encontrado nesta gaveta ♡" kaomoji="( ｡•́‿•̀｡)" />
         ) : (
           grouped.map((g) => (
             <section key={g.meta.key}>

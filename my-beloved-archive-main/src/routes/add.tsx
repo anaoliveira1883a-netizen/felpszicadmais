@@ -26,7 +26,7 @@ function AddMenu() {
       <PageHeader
         title="O que você quer guardar?"
         subtitle="escolha uma gaveta do arquivo"
-        kaomoji="( ✦ )"
+        kaomoji="( ˶ˆᗜˆ˵ ) ✦"
         backTo="/"
         backLabel="← arquivo"
       />
